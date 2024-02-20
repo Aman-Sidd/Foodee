@@ -8,7 +8,7 @@ import {
   Text,
   View,
 } from "react-native";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
 import Carousel, { Pagination } from "react-native-snap-carousel";
@@ -34,6 +34,7 @@ const HomeScreen = () => {
   const [carouselItems, setCarouselItems] = useState([]);
   const user = useSelector((state) => state.user);
   const userName = user.user_name;
+  const carouselRef = useRef(null);
   moment.tz.setDefault("Asia/Kolkata");
 
   const getTodayDate = () => {
@@ -93,9 +94,6 @@ const HomeScreen = () => {
     }
   };
 
-  // useEffect(() => {
-  //   fetchFood();
-  // }, [selectedMeal, foodType]);
   useEffect(() => {
     // Load data from AsyncStorage when the component mounts
 
@@ -110,15 +108,6 @@ const HomeScreen = () => {
 
   const saveData = async () => {
     try {
-      // const date = getTodayDate();
-      // const timestamp = new Date().getTime();
-      // const pastRecom = pastRecommendations.map((item) => {
-      //   item.date = date;
-      //   item.timestamp = timestamp;
-      //   return item;
-      // });
-      // console.log("Past Recom with Date: ", pastRecom);
-      // console.log("PAST RECOM: ", pastRecommendations);
       const data = {
         foods,
         pastRecommendations,
@@ -149,7 +138,7 @@ const HomeScreen = () => {
             const diffMillis = currentTime - item.timestamp;
             const diffSec = diffMillis / 1000; // Convert milliseconds to seconds
             console.log("TIME DIFF: ", diffSec);
-            if (diffSec <= 30) {
+            if (diffSec <= 1000) {
               return true;
             } else {
               isPastRecommendationDlt = true;
@@ -157,14 +146,18 @@ const HomeScreen = () => {
             }
           });
 
-        console.log("FilteredPastRecom: ", filteredPastRecommendations);
+        // Updates Carousel Food list at 11 PM everyday
+        const carouselUpdate =
+          (currentTime - parsedData.carouselItems[0].timestamp) / 1000 >= 1000
+            ? true
+            : false;
 
         setFoods(parsedData.foods || []);
         setPastRecommendations(filteredPastRecommendations || []);
         setDiscardedItems(parsedData.discardedItems || []);
         setCarouselItems(parsedData.carouselItems || []);
         // Check if any past recommendations were deleted
-        if (isPastRecommendationDlt) {
+        if (isPastRecommendationDlt || carouselUpdate) {
           console.log("PastRecomBeforeFetching: ", pastRecommendations);
           await fetchFood(filteredPastRecommendations);
         }
@@ -204,14 +197,25 @@ const HomeScreen = () => {
       ...pastRecommendations,
     ]);
     const remainingFoods = foods.filter((item) => foodId !== item.food_id);
-    setFoods(remainingFoods);
     const updatedCarouselItems = carouselItems.map((item) => {
       if (item.food_id === id) {
         item.isSelected = true;
       } else item.isSelected = false;
       return item;
     });
+    updatedCarouselItems.sort((a, b) => {
+      if (a.isSelected && !b.isSelected) {
+        return -1;
+      } else if (!a.isSelected && b.isSelected) {
+        return 1;
+      } else return 0;
+    });
+    setFoods(remainingFoods);
     setCarouselItems(updatedCarouselItems);
+    // Snap to the first item (index 0)
+    if (carouselRef.current) {
+      carouselRef.current.snapToItem(0);
+    }
   };
 
   const handleDeleteFood = () => {
@@ -225,8 +229,8 @@ const HomeScreen = () => {
       setFoods(remainingFoods);
     } else
       Alert.alert(
-        "Cannot Perform Action!",
-        "Last Recommendation cannot be discarded."
+        "Maximum Recommendations Reached!",
+        "You've reached the maximum limit of recommendations for today. Please select from the existing 6."
       );
   };
 
@@ -245,12 +249,12 @@ const HomeScreen = () => {
         <Text style={{ fontSize: 20, fontWeight: "500" }}>{item.name}</Text>
 
         {item.isSelected === true ? (
-          <View>
+          <View style={{ margin: 6, marginBottom: 9 }}>
             <Text>SELECTED</Text>
           </View>
         ) : item.isSelected === false ? (
-          <View>
-            <Text>Not Selected</Text>
+          <View style={{ margin: 6, marginBottom: 9 }}>
+            <Text>NOT SELECTED</Text>
           </View>
         ) : (
           <View style={styles.buttonContainer}>
@@ -347,6 +351,7 @@ const HomeScreen = () => {
             onPress={() => {
               setPastRecommendations([]);
               setDiscardedItems([]);
+              setActiveSlide(0);
               setSelectedMeal("Breakfast");
             }}
             style={[
@@ -377,6 +382,8 @@ const HomeScreen = () => {
             onPress={() => {
               setPastRecommendations([]);
               setDiscardedItems([]);
+              setActiveSlide(0);
+
               setSelectedMeal("Lunch");
             }}
             style={[
@@ -405,6 +412,7 @@ const HomeScreen = () => {
             onPress={() => {
               setPastRecommendations([]);
               setDiscardedItems([]);
+              setActiveSlide(0);
               setSelectedMeal("Dinner");
             }}
             style={[
@@ -495,6 +503,7 @@ const HomeScreen = () => {
             }}
           >
             <Carousel
+              ref={carouselRef}
               layout={"default"}
               data={carouselItems}
               renderItem={_renderItem}
@@ -541,7 +550,7 @@ const HomeScreen = () => {
               Previously Chosen
             </Text>
           </Pressable>
-          <Pressable
+          {/* <Pressable
             onPress={() => {
               setPreviousData("Discarded");
             }}
@@ -562,7 +571,7 @@ const HomeScreen = () => {
             >
               Discarded
             </Text>
-          </Pressable>
+          </Pressable> */}
         </View>
 
         {/* To DISPLAY PAST RECOMMENDED ITEMS */}
