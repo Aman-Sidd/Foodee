@@ -23,17 +23,19 @@ import AsyncStorage from "@react-native-community/async-storage";
 import moment from "moment-timezone";
 
 const HomeScreen = () => {
+  const user = useSelector((state) => state.user);
+  const userName = user.user_name;
+  const userFoodType = user.food_type;
+
   const [selectedMeal, setSelectedMeal] = useState("Breakfast");
   const [foods, setFoods] = useState([]);
   const [loadingRecommendations, setLoadingRecommendations] = useState(true);
   const [pastRecommendations, setPastRecommendations] = useState([]);
   const [discardedItems, setDiscardedItems] = useState([]);
-  const [foodType, setFoodType] = useState("veg");
+  const [foodType, setFoodType] = useState(userFoodType);
   const [previousData, setPreviousData] = useState("Chosen");
   const [activeSlide, setActiveSlide] = useState(0);
   const [carouselItems, setCarouselItems] = useState([]);
-  const user = useSelector((state) => state.user);
-  const userName = user.user_name;
   const carouselRef = useRef(null);
   moment.tz.setDefault("Asia/Kolkata");
 
@@ -85,7 +87,12 @@ const HomeScreen = () => {
       setFoods(response.data.data);
       setDiscardedItems([]);
       setCarouselItems([
-        { ...response.data.data[0], timestamp, date: getTodayDate() },
+        {
+          ...response.data.data[0],
+          timestamp,
+          date: getTodayDate(),
+          isSelected: null,
+        },
       ]);
     } catch (err) {
       console.log("ERROR: fetching breakfast", err);
@@ -199,14 +206,14 @@ const HomeScreen = () => {
     const remainingFoods = foods.filter((item) => foodId !== item.food_id);
     const updatedCarouselItems = carouselItems.map((item) => {
       if (item.food_id === id) {
-        item.isSelected = true;
-      } else item.isSelected = false;
+        item.isSelected = "selected";
+      } else item.isSelected = "discarded";
       return item;
     });
     updatedCarouselItems.sort((a, b) => {
-      if (a.isSelected && !b.isSelected) {
+      if (a.isSelected === "selected" && b.isSelected === "discarded") {
         return -1;
-      } else if (!a.isSelected && b.isSelected) {
+      } else if (a.isSelected === "discarded" && b.isSelected === "discarded") {
         return 1;
       } else return 0;
     });
@@ -235,7 +242,7 @@ const HomeScreen = () => {
   };
 
   const _renderItem = ({ item, index }) => {
-    // console.log("ITEM: ", item);
+    console.log("ITEM: ", item);
     return (
       <View style={styles.carouselFood}>
         <View style={styles.imageContainer}>
@@ -248,11 +255,23 @@ const HomeScreen = () => {
         </View>
         <Text style={{ fontSize: 20, fontWeight: "500" }}>{item.name}</Text>
 
-        {item.isSelected === true ? (
-          <View style={{ margin: 6, marginBottom: 9 }}>
-            <Text>SELECTED</Text>
+        {item.isSelected === "selected" ? (
+          <View
+            style={{
+              margin: 6,
+              marginBottom: 9,
+              // backgroundColor: "#CCCCCC",
+              padding: 5,
+              borderRadius: 7,
+            }}
+          >
+            <Text
+              style={{ color: "black", fontWeight: "bold", color: "#008000" }}
+            >
+              SELECTED
+            </Text>
           </View>
-        ) : item.isSelected === false ? (
+        ) : item.isSelected === "discarded" ? (
           <View style={{ margin: 6, marginBottom: 9 }}>
             <Text>NOT SELECTED</Text>
           </View>
@@ -508,7 +527,9 @@ const HomeScreen = () => {
               data={carouselItems}
               renderItem={_renderItem}
               sliderWidth={Dimensions.get("window").width - 20}
+              // sliderWidth={100}
               itemWidth={Dimensions.get("window").width - 20} // You can adjust the width of each item as per your requirement
+              // itemWidth={100} // You can adjust the width of each item as per your requirement
               onSnapToItem={(index) => setActiveSlide(index)}
             />
             <Pagination

@@ -13,10 +13,14 @@ import React, { useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import KeyboardDismissWrapper from "../components/KeyboardDismissWrapper";
 import { useDispatch } from "react-redux";
-import { set_name } from "../redux/UserSlice";
+import { set_food_type, set_name, set_user_info } from "../redux/UserSlice";
+import { MaterialIcons } from "@expo/vector-icons";
+import { Feather } from "@expo/vector-icons";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 const WelcomeScreen = ({ navigation }) => {
   const [name, setName] = useState("");
+  const [foodType, setFoodType] = useState("veg");
   const dispatch = useDispatch();
 
   console.log(name);
@@ -25,8 +29,8 @@ const WelcomeScreen = ({ navigation }) => {
     if (name === "") {
       Alert.alert("Oops!", "Name cannot be empty.");
     } else {
-      dispatch(set_name(name));
-      navigation.navigate("Home");
+      dispatch(set_user_info({ name, foodType }));
+      navigation.replace("Home");
     }
   };
 
@@ -60,6 +64,117 @@ const WelcomeScreen = ({ navigation }) => {
               placeholder="Your Good Name, Please!"
             />
           </KeyboardAvoidingView>
+
+          {/* <View
+            style={{
+              display: "flex",
+              flexDirection: "row",
+              justifyContent: "center",
+            }}
+          >
+            <Pressable
+              style={{
+                width: 80,
+                backgroundColor: "gray",
+                height: 40,
+                marginHorizontal: 20,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: 8,
+              }}
+              onPress={() => setFoodType("veg")}
+            >
+              <Text
+                style={{ fontSize: 15, color: "white", fontWeight: "bold" }}
+              >
+                Veg
+              </Text>
+            </Pressable>
+            <Pressable
+              style={{
+                width: 80,
+                backgroundColor: "gray",
+                height: 40,
+                marginHorizontal: 20,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                borderRadius: 8,
+              }}
+              onPress={() => setFoodType("nonveg")}
+            >
+              <Text
+                style={{ color: "white", fontSize: 15, fontWeight: "bold" }}
+              >
+                Non-Veg
+              </Text>
+            </Pressable>
+          </View> */}
+
+          <View
+            style={{
+              display: "flex",
+              flexDirection: "row",
+              justifyContent: "center",
+            }}
+          >
+            <Pressable
+              onPress={() => {
+                setFoodType("veg");
+              }}
+              style={[
+                styles.buttonStyleFoodType,
+                foodType === "veg"
+                  ? { backgroundColor: "#ffa300" }
+                  : { backgroundColor: "#f5f5f5" },
+              ]}
+            >
+              <MaterialCommunityIcons
+                name="food-apple"
+                size={18}
+                color={foodType === "veg" ? "#f5f5f5" : "#4f4f4f"}
+              />
+              <Text
+                style={[
+                  styles.sliderTextStyle,
+                  {
+                    color: foodType === "veg" ? "#f5f5f5" : "#4f4f4f",
+                  },
+                ]}
+              >
+                veg
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                setFoodType("nonveg");
+              }}
+              style={[
+                styles.buttonStyleFoodType,
+                foodType === "nonveg"
+                  ? { backgroundColor: "#ffa300" }
+                  : { backgroundColor: "#f5f5f5" },
+              ]}
+            >
+              <MaterialCommunityIcons
+                name="food-turkey"
+                size={18}
+                color={foodType === "nonveg" ? "#f5f5f5" : "#4f4f4f"}
+              />
+              <Text
+                style={[
+                  styles.sliderTextStyle,
+                  {
+                    color: foodType === "nonveg" ? "#f5f5f5" : "#4f4f4f",
+                  },
+                ]}
+              >
+                non-veg
+              </Text>
+            </Pressable>
+          </View>
+
           <View>
             <Pressable onPress={handleGetStarted} style={styles.buttonStyle}>
               <Text style={{ fontWeight: "600", fontSize: 18, color: "white" }}>
@@ -87,6 +202,21 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     flex: 1,
   },
+  sliderTextStyle: {
+    fontSize: 16,
+    fontWeight: "500",
+  },
+  buttonStyleFoodType: {
+    width: 120,
+    height: 35,
+    gap: 5,
+    flexDirection: "row",
+    borderRadius: 10,
+    marginTop: 13,
+    marginHorizontal: 7,
+    justifyContent: "center",
+    alignItems: "center",
+  },
   footerContainer: {
     // backgroundColor: "gray",
     flex: 1,
@@ -96,9 +226,9 @@ const styles = StyleSheet.create({
   },
   nameInput: {
     alignSelf: "center",
-    marginBottom: 50,
-    width: "85%",
-    height: 64,
+    marginBottom: 5,
+    width: "56%",
+    height: 55,
     color: "black",
     borderColor: "#405064",
     fontSize: 16,

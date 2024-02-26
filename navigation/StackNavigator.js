@@ -12,13 +12,13 @@ const StackNavigator = () => {
     <NavigationContainer>
       <Stack.Navigator>
         <Stack.Screen
-          name="Home"
-          component={HomeScreen}
+          name="Welcome"
+          component={WelcomeScreen}
           options={{ headerShown: false }}
         />
         <Stack.Screen
-          name="Welcome"
-          component={WelcomeScreen}
+          name="Home"
+          component={HomeScreen}
           options={{ headerShown: false }}
         />
       </Stack.Navigator>
