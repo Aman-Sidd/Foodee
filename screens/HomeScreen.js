@@ -31,12 +31,12 @@ const HomeScreen = () => {
   const [foods, setFoods] = useState([]);
   const [loadingRecommendations, setLoadingRecommendations] = useState(true);
   const [pastRecommendations, setPastRecommendations] = useState([]);
-  const [discardedItems, setDiscardedItems] = useState([]);
   const [foodType, setFoodType] = useState(userFoodType);
   const [previousData, setPreviousData] = useState("Chosen");
   const [activeSlide, setActiveSlide] = useState(0);
   const [carouselItems, setCarouselItems] = useState([]);
   const carouselRef = useRef(null);
+  const paginationRef = useRef(null);
   moment.tz.setDefault("Asia/Kolkata");
 
   const getTodayDate = () => {
@@ -48,7 +48,7 @@ const HomeScreen = () => {
     try {
       const keys = await AsyncStorage.getAllKeys();
       console.log(keys);
-      await AsyncStorage.removeItem(`${foodType}${selectedMeal}`);
+      await AsyncStorage.multiRemove(keys);
     } catch (err) {
       console.log(err);
     }
@@ -85,7 +85,6 @@ const HomeScreen = () => {
       });
 
       setFoods(response.data.data);
-      setDiscardedItems([]);
       setCarouselItems([
         {
           ...response.data.data[0],
@@ -103,7 +102,6 @@ const HomeScreen = () => {
 
   useEffect(() => {
     // Load data from AsyncStorage when the component mounts
-
     loadData();
     // deleteAsyncData();
   }, [foodType, selectedMeal]);
@@ -111,14 +109,13 @@ const HomeScreen = () => {
   useEffect(() => {
     // Save data to AsyncStorage whenever relevant state changes
     saveData();
-  }, [foods, pastRecommendations, discardedItems, carouselItems]);
+  }, [foods, pastRecommendations, carouselItems]);
 
   const saveData = async () => {
     try {
       const data = {
         foods,
         pastRecommendations,
-        discardedItems,
         carouselItems,
       };
       await AsyncStorage.setItem(
@@ -131,40 +128,77 @@ const HomeScreen = () => {
   };
 
   const loadData = async () => {
+    console.log("LOADING DATA");
     setLoadingRecommendations(true);
     try {
       let isPastRecommendationDlt = false;
       const userData = await AsyncStorage.getItem(`${foodType}${selectedMeal}`);
-      console.log(userData);
+      console.log("ASYNC USERDATA: ", userData);
       if (userData !== null) {
         const parsedData = JSON.parse(userData);
         const currentTime = new Date().getTime(); // Current timestamp
-        const today = moment();
+        const currentDate = moment().tz("Asia/Kolkata").startOf("day");
         const filteredPastRecommendations =
           parsedData.pastRecommendations.filter((item) => {
+            // const diffMillis = currentTime - item.timestamp;
+            // const diffSec = diffMillis / 1000; // Convert milliseconds to seconds
+            // console.log("TIME DIFF: ", diffSec);
+            // if (diffSec <= 1000) {
+            //   return true;
+            // } else {
+            //   isPastRecommendationDlt = true;
+            //   return false;
+            // }
+            const storedDate = moment
+              .tz(item.date, "Asia/Kolkata")
+              .startOf("day"); // Convert stored date string to moment object in Asia/Kolkata time zone, with time set to 00:00:00
+            console.log("CURRENT DATE: ", currentDate);
+            console.log("STORED DATE: ", storedDate);
+            const diffInDays = currentDate.diff(storedDate, "days"); // Difference in days
+            console.log("Days difference: ", diffInDays);
             const diffMillis = currentTime - item.timestamp;
             const diffSec = diffMillis / 1000; // Convert milliseconds to seconds
             console.log("TIME DIFF: ", diffSec);
-            if (diffSec <= 1000) {
+            if (diffInDays <= 7) {
               return true;
             } else {
               isPastRecommendationDlt = true;
               return false;
             }
+            // Refresh after 7 day old for each item
+            // const storedDate = moment
+            //   .tz(item.date, "Asia/Kolkata")
+            //   .startOf("day"); // Convert stored date string to moment object in Asia/Kolkata time zone, with time set to 00:00:00
+            // console.log("CURRENT DATE: ", currentDate);
+            // console.log("STORED DATE: ", storedDate);
+            // const diffInDays = currentDate.diff(storedDate, "days"); // Difference in days
+            // console.log("Days difference: ", diffInDays);
+            // return diffInDays <= 7;
           });
 
         // Updates Carousel Food list at 11 PM everyday
-        const carouselUpdate =
-          (currentTime - parsedData.carouselItems[0].timestamp) / 1000 >= 1000
-            ? true
-            : false;
+        // const carouselUpdate =
+        //   (currentTime - parsedData.carouselItems[0].timestamp) / 1000 >= 1000
+        //     ? true
+        //     : false;
 
         setFoods(parsedData.foods || []);
         setPastRecommendations(filteredPastRecommendations || []);
-        setDiscardedItems(parsedData.discardedItems || []);
+        parsedData.carouselItems.sort((a, b) => {
+          if (a.isSelected === "selected" && b.isSelected === "discarded") {
+            return -1;
+          } else if (
+            a.isSelected === "discarded" &&
+            b.isSelected === "selected"
+          ) {
+            return 1;
+          } else return 0;
+        });
+
         setCarouselItems(parsedData.carouselItems || []);
+
         // Check if any past recommendations were deleted
-        if (isPastRecommendationDlt || carouselUpdate) {
+        if (isPastRecommendationDlt) {
           console.log("PastRecomBeforeFetching: ", pastRecommendations);
           await fetchFood(filteredPastRecommendations);
         }
@@ -178,24 +212,33 @@ const HomeScreen = () => {
     }
   };
 
+  useEffect(() => {
+    // Set up the timer to trigger the update at 11 PM
+    const timer = setTimeout(updateCarousel, calculateTimeToNextUpdate());
+
+    // Clear the timeout when the component unmounts
+    return () => clearTimeout(timer);
+  }, [carouselItems]);
+
+  const updateCarousel = async () => {
+    // Fetch new data and update the carousel
+    await fetchFood();
+  };
+
+  const calculateTimeToNextUpdate = () => {
+    const now = moment();
+    const elevenPM = moment().hour(23).minute(0).second(0); // Set the time to 11 PM
+    if (now.isAfter(elevenPM)) {
+      elevenPM.add(1, "day"); // If it's past 11 PM, set it to 11 PM of the next day
+    }
+    const diffInMilliseconds = elevenPM.diff(now);
+    return diffInMilliseconds;
+  };
+
   // To DELETE THE RECOMMENDATION
   const handleSelectFood = (id, index) => {
     const date = getTodayDate();
     const timestamp = new Date().getTime();
-    // if (foods.length > 1) {
-    //   const foodId = carouselItems[0].food_id;
-    //   setPastRecommendations([
-    //     { ...carouselItems[0], date, timestamp },
-    //     ...pastRecommendations,
-    //   ]);
-    //   const remainingFoods = foods.filter((item) => foodId !== item.food_id);
-    //   setFoods(remainingFoods);
-    //   setCarouselItems([{ ...foods[1], date, timestamp }, ...carouselItems]);
-    // } else
-    //   Alert.alert(
-    //     "Cannot Perform Action!",
-    //     "Last Recommendation cannot be deleted."
-    //   );
 
     const foodId = id;
     console.log("INDEX:", index);
@@ -210,19 +253,19 @@ const HomeScreen = () => {
       } else item.isSelected = "discarded";
       return item;
     });
-    updatedCarouselItems.sort((a, b) => {
-      if (a.isSelected === "selected" && b.isSelected === "discarded") {
-        return -1;
-      } else if (a.isSelected === "discarded" && b.isSelected === "discarded") {
-        return 1;
-      } else return 0;
-    });
+    // updatedCarouselItems.sort((a, b) => {
+    //   if (a.isSelected === "selected" && b.isSelected === "discarded") {
+    //     return -1;
+    //   } else if (a.isSelected === "discarded" && b.isSelected === "selected") {
+    //     return 1;
+    //   } else return 0;
+    // });
+
     setFoods(remainingFoods);
     setCarouselItems(updatedCarouselItems);
-    // Snap to the first item (index 0)
-    if (carouselRef.current) {
-      carouselRef.current.snapToItem(0);
-    }
+    // if (carouselRef.current) {
+    //   carouselRef.current.snapToItem(0);
+    // }
   };
 
   const handleDeleteFood = () => {
@@ -231,7 +274,6 @@ const HomeScreen = () => {
     if (foods.length > 1) {
       const foodId = foods[0].food_id;
       setCarouselItems([{ ...foods[1], date, timestamp }, ...carouselItems]);
-      setDiscardedItems([{ ...foods[0], date, timestamp }, ...discardedItems]);
       const remainingFoods = foods.filter((item) => foodId !== item.food_id);
       setFoods(remainingFoods);
     } else
@@ -247,13 +289,21 @@ const HomeScreen = () => {
       <View style={styles.carouselFood}>
         <View style={styles.imageContainer}>
           <Image
-            style={{ height: 150, width: 150, resizeMode: "contain" }}
+            style={{
+              height: 150,
+              width: 150,
+              resizeMode: "contain",
+              borderRadius: 10,
+            }}
             source={{
-              uri: "https://png.pngtree.com/png-clipart/20220206/original/pngtree-burger-vector-png-image_7263846.png",
+              // uri: "https://png.pngtree.com/png-clipart/20220206/original/pngtree-burger-vector-png-image_7263846.png",
+              uri: item.image,
             }}
           />
         </View>
-        <Text style={{ fontSize: 20, fontWeight: "500" }}>{item.name}</Text>
+        <Text style={{ fontSize: 20, fontWeight: "500", textAlign: "center" }}>
+          {item.name}
+        </Text>
 
         {item.isSelected === "selected" ? (
           <View
@@ -262,6 +312,7 @@ const HomeScreen = () => {
               marginBottom: 9,
               // backgroundColor: "#CCCCCC",
               padding: 5,
+              alignSelf: "center",
               borderRadius: 7,
             }}
           >
@@ -272,7 +323,7 @@ const HomeScreen = () => {
             </Text>
           </View>
         ) : item.isSelected === "discarded" ? (
-          <View style={{ margin: 6, marginBottom: 9 }}>
+          <View style={{ margin: 6, marginBottom: 9, alignSelf: "center" }}>
             <Text>NOT SELECTED</Text>
           </View>
         ) : (
@@ -295,18 +346,17 @@ const HomeScreen = () => {
   return (
     <SafeAreaView style={styles.mainContainer}>
       <View>
-        <Text style={{ fontSize: 15, fontWeight: "500" }}>
+        <Text style={{ fontSize: 20, fontWeight: "500" }}>
           Hello {userName},
         </Text>
-        <Text style={{ fontSize: 20, fontWeight: "bold" }}>Welcome Back</Text>
+        <Text style={{ fontSize: 23, fontWeight: "bold" }}>Welcome Back</Text>
       </View>
 
       {/* To SELECT VEG AND NON-VEG */}
-      <View style={{ display: "flex", flexDirection: "row" }}>
+      {/* <View style={{ display: "flex", flexDirection: "row" }}>
         <Pressable
           onPress={() => {
             setPastRecommendations([]);
-            setDiscardedItems([]);
             setFoodType("veg");
           }}
           style={[
@@ -335,7 +385,6 @@ const HomeScreen = () => {
         <Pressable
           onPress={() => {
             setPastRecommendations([]);
-            setDiscardedItems([]);
             setFoodType("nonveg");
           }}
           style={[
@@ -361,7 +410,7 @@ const HomeScreen = () => {
             non-veg
           </Text>
         </Pressable>
-      </View>
+      </View> */}
 
       {/* To SELECT THE MEAL i.e. BREAKFAST, LUNCH OR DINNER */}
       <View>
@@ -369,7 +418,6 @@ const HomeScreen = () => {
           <Pressable
             onPress={() => {
               setPastRecommendations([]);
-              setDiscardedItems([]);
               setActiveSlide(0);
               setSelectedMeal("Breakfast");
             }}
@@ -400,7 +448,6 @@ const HomeScreen = () => {
           <Pressable
             onPress={() => {
               setPastRecommendations([]);
-              setDiscardedItems([]);
               setActiveSlide(0);
 
               setSelectedMeal("Lunch");
@@ -430,7 +477,6 @@ const HomeScreen = () => {
           <Pressable
             onPress={() => {
               setPastRecommendations([]);
-              setDiscardedItems([]);
               setActiveSlide(0);
               setSelectedMeal("Dinner");
             }}
@@ -464,17 +510,18 @@ const HomeScreen = () => {
           </Pressable>
         </ScrollView>
       </View>
-
-      <Text
-        style={{
-          marginVertical: 15,
-          fontSize: 18,
-          fontWeight: "500",
-          color: "#4f4f4f",
-        }}
-      >
-        Recommendations
-      </Text>
+      <View>
+        <Text
+          style={{
+            marginVertical: 10,
+            fontSize: 18,
+            fontWeight: "500",
+            color: "#4f4f4f",
+          }}
+        >
+          Recommendations
+        </Text>
+      </View>
 
       {/* To DISPLAY RECOMMENDED FOOD ITEMS */}
       {/* <View style={{ backgroundColor: "white", height: 320 }}>
@@ -510,45 +557,63 @@ const HomeScreen = () => {
           </View>
         )}
       </View> */}
+
       <View style={styles.carouselContainer}>
         {loadingRecommendations ? (
           <LoadingScreen />
         ) : (
           <View
             style={{
-              height: 300,
+              height: 320,
               // backgroundColor: "red",
               padding: 10,
             }}
           >
-            <Carousel
-              ref={carouselRef}
-              layout={"default"}
-              data={carouselItems}
-              renderItem={_renderItem}
-              sliderWidth={Dimensions.get("window").width - 20}
-              // sliderWidth={100}
-              itemWidth={Dimensions.get("window").width - 20} // You can adjust the width of each item as per your requirement
-              // itemWidth={100} // You can adjust the width of each item as per your requirement
-              onSnapToItem={(index) => setActiveSlide(index)}
-            />
-            <Pagination
-              dotsLength={carouselItems.length}
-              activeDotIndex={activeSlide}
-              containerStyle={styles.paginationContainer}
-              dotStyle={styles.dotStyle}
-              inactiveDotOpacity={0.4}
-              inactiveDotScale={0.6}
-            />
+            <View
+              style={{
+                padding: 10,
+                width: "100%",
+                alignItems: "center",
+                justifyContent: "center",
+                // paddingTop: 12,
+                // paddingHorizontal: 12,
+                // marginHorizontal: 20,
+                backgroundColor: "#f5f5f5",
+                // backgroundColor: "red",
+                borderRadius: 15,
+              }}
+            >
+              <Carousel
+                ref={carouselRef}
+                layout={"default"}
+                data={carouselItems}
+                renderItem={_renderItem}
+                sliderWidth={Dimensions.get("window").width - 60}
+                // sliderWidth={100}
+                itemWidth={Dimensions.get("window").width - 60} // You can adjust the width of each item as per your requirement
+                // itemWidth={100} // You can adjust the width of each item as per your requirement
+                onSnapToItem={(index) => setActiveSlide(index)}
+                activeSlide={activeSlide}
+              />
+            </View>
+            <View style={{ marginTop: 10 }}>
+              <Pagination
+                dotsLength={carouselItems.length}
+                activeDotIndex={activeSlide}
+                containerStyle={styles.paginationContainer}
+                dotStyle={styles.dotStyle}
+                inactiveDotOpacity={0.4}
+                inactiveDotScale={0.6}
+              />
+            </View>
           </View>
         )}
       </View>
 
       {/* To LIST DOWN CHOSEN ITEMS OR DISCARDED ITEMS */}
       <View style={{ flex: 1 }}>
-        <View
-          style={{ display: "flex", flexDirection: "row", marginBottom: 7 }}
-        >
+        {/* To DISPLAY PAST RECOMMENDED ITEMS */}
+        <View style={{}}>
           <Pressable
             onPress={() => {
               setPreviousData("Chosen");
@@ -558,6 +623,7 @@ const HomeScreen = () => {
               previousData === "Chosen"
                 ? { backgroundColor: "#ffa300", width: 170 }
                 : { backgroundColor: "#f5f5f5", width: 170 },
+              { marginBottom: 8 },
             ]}
           >
             <Text
@@ -571,75 +637,27 @@ const HomeScreen = () => {
               Previously Chosen
             </Text>
           </Pressable>
-          {/* <Pressable
-            onPress={() => {
-              setPreviousData("Discarded");
-            }}
-            style={[
-              styles.buttonStyle,
-              previousData === "Discarded"
-                ? { backgroundColor: "#ffa300", width: 170 }
-                : { backgroundColor: "#f5f5f5", width: 170 },
-            ]}
-          >
-            <Text
-              style={[
-                styles.sliderTextStyle,
-                {
-                  color: previousData === "Discarded" ? "#f5f5f5" : "#4f4f4f",
-                },
-              ]}
-            >
-              Discarded
-            </Text>
-          </Pressable> */}
-        </View>
-
-        {/* To DISPLAY PAST RECOMMENDED ITEMS */}
-        <View style={{ flex: 1 }}>
-          {previousData === "Chosen" ? (
-            <FlatList
-              data={pastRecommendations}
-              renderItem={({ item }) => (
-                <View style={styles.pastRecommendationsContainer}>
-                  <View style={styles.pastRecommendedItems}>
-                    <Image
-                      style={{ height: 50, width: 50 }}
-                      source={{
-                        uri: "https://png.pngtree.com/png-clipart/20220206/original/pngtree-burger-vector-png-image_7263846.png",
-                      }}
-                    />
-                  </View>
-                  <Text style={{ fontSize: 17, fontWeight: "500" }}>
-                    {item.name}
-                  </Text>
+          <FlatList
+            data={pastRecommendations}
+            renderItem={({ item }) => (
+              <View style={styles.pastRecommendationsContainer}>
+                <View style={styles.pastRecommendedItems}>
+                  <Image
+                    style={{ height: 50, width: 50, borderRadius: 5 }}
+                    source={{
+                      // uri: "https://png.pngtree.com/png-clipart/20220206/original/pngtree-burger-vector-png-image_7263846.png",
+                      uri: item.image,
+                    }}
+                  />
                 </View>
-              )}
-              showsVerticalScrollIndicator={false}
-              keyExtractor={(item) => item.food_id}
-            />
-          ) : (
-            <FlatList
-              data={discardedItems}
-              renderItem={({ item }) => (
-                <View style={styles.pastRecommendationsContainer}>
-                  <View style={styles.pastRecommendedItems}>
-                    <Image
-                      style={{ height: 50, width: 50 }}
-                      source={{
-                        uri: "https://png.pngtree.com/png-clipart/20220206/original/pngtree-burger-vector-png-image_7263846.png",
-                      }}
-                    />
-                  </View>
-                  <Text style={{ fontSize: 17, fontWeight: "500" }}>
-                    {item.name}
-                  </Text>
-                </View>
-              )}
-              showsVerticalScrollIndicator={false}
-              keyExtractor={(item) => item.food_id}
-            />
-          )}
+                <Text style={{ fontSize: 17, fontWeight: "500" }}>
+                  {item.name}
+                </Text>
+              </View>
+            )}
+            showsVerticalScrollIndicator={false}
+            keyExtractor={(item) => item.food_id}
+          />
         </View>
       </View>
     </SafeAreaView>
@@ -651,11 +669,12 @@ export default HomeScreen;
 const styles = StyleSheet.create({
   carouselContainer: {
     flex: 1,
-    backgroundColor: "#fff",
+    // backgroundColor: "#fff",
     // backgroundColor: "blue",
     alignItems: "center",
     height: 300,
-    justifyContent: "center",
+    marginBottom: 20,
+    // justifyContent: "center",
   },
   slide: {
     width: 200,
@@ -701,21 +720,25 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
   carouselFood: {
-    width: "93%",
-    alignItems: "center",
-    justifyContent: "center",
-    // paddingTop: 12,
-    // paddingHorizontal: 12,
-    marginHorizontal: 10,
-    backgroundColor: "#f5f5f5",
-    // backgroundColor: "red",
-    borderRadius: 15,
+    // width: "93%",
+    // alignItems: "center",
+    // justifyContent: "center",
+    // // paddingTop: 12,
+    // // paddingHorizontal: 12,
+    // marginHorizontal: 10,
+    // backgroundColor: "#f5f5f5",
+    // // backgroundColor: "red",
+    // borderRadius: 15,
   },
   imageContainer: {
+    alignSelf: "center",
     backgroundColor: "white",
     borderRadius: 15,
-    width: "95%",
+    // borderWidth: 6,
+    // borderColor: "red",
+    width: "50%",
     marginTop: 7,
+    paddingVertical: 12,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -729,6 +752,7 @@ const styles = StyleSheet.create({
   buttonContainer: {
     display: "flex",
     flexDirection: "row",
+    justifyContent: "center",
     margin: 20,
     gap: 10,
   },
