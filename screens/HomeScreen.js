@@ -42,7 +42,11 @@ const HomeScreen = () => {
   const getTodayDate = () => {
     return moment().format("YYYY-MM-DD");
   };
-  const timestamp = new Date().getTime();
+  const timestamp = moment().valueOf();
+
+  const getElevenPM = () => {
+    return moment.tz("Asia/Kolkata").hour(23).minute(0).second(0).valueOf();
+  };
 
   const deleteAsyncData = async () => {
     try {
@@ -91,6 +95,11 @@ const HomeScreen = () => {
           timestamp,
           date: getTodayDate(),
           isSelected: null,
+          deadline: () => {
+            const val = getElevenPM();
+            console.log("HEY I am deadline value: ", val);
+            return val;
+          },
         },
       ]);
     } catch (err) {
@@ -101,18 +110,19 @@ const HomeScreen = () => {
   };
 
   useEffect(() => {
-    // Load data from AsyncStorage when the component mounts
+    // Load data from AsyncStorage when the component mount
     loadData();
     // deleteAsyncData();
   }, [foodType, selectedMeal]);
 
   useEffect(() => {
-    // Save data to AsyncStorage whenever relevant state changes
+    // Save data to AsyncStorag e whenever relevant state changes
     saveData();
   }, [foods, pastRecommendations, carouselItems]);
 
   const saveData = async () => {
     try {
+      console.log("carouselItem[0]: ", carouselItems[0]);
       const data = {
         foods,
         pastRecommendations,
@@ -123,8 +133,14 @@ const HomeScreen = () => {
         JSON.stringify(data)
       );
     } catch (error) {
-      console.error("Error saving data to AsyncStorage:", error);
+      console.error("Error saving data to AsyncStorage :", error);
     }
+  };
+
+  const fetchCarouselItems = (time) => {
+    setTimeout(async () => {
+      await fetchFood();
+    }, time);
   };
 
   const loadData = async () => {
@@ -140,15 +156,6 @@ const HomeScreen = () => {
         const currentDate = moment().tz("Asia/Kolkata").startOf("day");
         const filteredPastRecommendations =
           parsedData.pastRecommendations.filter((item) => {
-            // const diffMillis = currentTime - item.timestamp;
-            // const diffSec = diffMillis / 1000; // Convert milliseconds to seconds
-            // console.log("TIME DIFF: ", diffSec);
-            // if (diffSec <= 1000) {
-            //   return true;
-            // } else {
-            //   isPastRecommendationDlt = true;
-            //   return false;
-            // }
             const storedDate = moment
               .tz(item.date, "Asia/Kolkata")
               .startOf("day"); // Convert stored date string to moment object in Asia/Kolkata time zone, with time set to 00:00:00
@@ -156,31 +163,13 @@ const HomeScreen = () => {
             console.log("STORED DATE: ", storedDate);
             const diffInDays = currentDate.diff(storedDate, "days"); // Difference in days
             console.log("Days difference: ", diffInDays);
-            const diffMillis = currentTime - item.timestamp;
-            const diffSec = diffMillis / 1000; // Convert milliseconds to seconds
-            console.log("TIME DIFF: ", diffSec);
             if (diffInDays <= 7) {
               return true;
             } else {
               isPastRecommendationDlt = true;
               return false;
             }
-            // Refresh after 7 day old for each item
-            // const storedDate = moment
-            //   .tz(item.date, "Asia/Kolkata")
-            //   .startOf("day"); // Convert stored date string to moment object in Asia/Kolkata time zone, with time set to 00:00:00
-            // console.log("CURRENT DATE: ", currentDate);
-            // console.log("STORED DATE: ", storedDate);
-            // const diffInDays = currentDate.diff(storedDate, "days"); // Difference in days
-            // console.log("Days difference: ", diffInDays);
-            // return diffInDays <= 7;
           });
-
-        // Updates Carousel Food list at 11 PM everyday
-        // const carouselUpdate =
-        //   (currentTime - parsedData.carouselItems[0].timestamp) / 1000 >= 1000
-        //     ? true
-        //     : false;
 
         setFoods(parsedData.foods || []);
         setPastRecommendations(filteredPastRecommendations || []);
@@ -197,8 +186,23 @@ const HomeScreen = () => {
 
         setCarouselItems(parsedData.carouselItems || []);
 
+        // const carouselTimestamp = parsedData.carouselItems[0].timestamp;
+        // console.log("CAROUSEL TIMESTAMP: ", carouselTimestamp / 1000);
+        // // sddsa
+
+        // console.log("ELEVEN PM: ", elevenPM / 1000);
+        // const diffInMilliseconds = elevenPM - carouselTimestamp;
+        // console.log("DIFF TIMESTMAP : ", diffInMilliseconds / 1000);
+
         // Check if any past recommendations were deleted
-        if (isPastRecommendationDlt) {
+        console.log("DEADLINE : ", parsedData.carouselItems[0].deadline);
+        console.log("FUnction", getElevenPM());
+        console.log("ELEVEN PM : ", timestamp);
+        console.log("DIFF: ", timestamp - parsedData.carouselItems[0].deadline);
+        if (
+          isPastRecommendationDlt ||
+          parsedData.carouselItems[0].deadline <= timestamp
+        ) {
           console.log("PastRecomBeforeFetching: ", pastRecommendations);
           await fetchFood(filteredPastRecommendations);
         }
@@ -212,33 +216,34 @@ const HomeScreen = () => {
     }
   };
 
-  useEffect(() => {
-    // Set up the timer to trigger the update at 11 PM
-    const timer = setTimeout(updateCarousel, calculateTimeToNextUpdate());
+  // useEffect(() => {
+  //   // Set up the timer to trigge r the update at 11 PM
+  //   const timer = setTimeout(updateCarousel, calculateTimeToNextUpdate());
 
-    // Clear the timeout when the component unmounts
-    return () => clearTimeout(timer);
-  }, [carouselItems]);
+  //   // Clear the timeout when the component unmounts
+  //   return () => clearTimeout(timer);
+  // }, [carouselItems]);
 
-  const updateCarousel = async () => {
-    // Fetch new data and update the carousel
-    await fetchFood();
-  };
+  // const updateCarousel = async () => {
+  //   // Fetch new data and update the carousel
+  //   await fetchFood();
+  // };
 
-  const calculateTimeToNextUpdate = () => {
-    const now = moment();
-    const elevenPM = moment().hour(23).minute(0).second(0); // Set the time to 11 PM
-    if (now.isAfter(elevenPM)) {
-      elevenPM.add(1, "day"); // If it's past 11 PM, set it to 11 PM of the next day
-    }
-    const diffInMilliseconds = elevenPM.diff(now);
-    return diffInMilliseconds;
-  };
+  // const calculateTimeToNextUpdate = () => {
+  //   const now = moment.tz("Asia/Kolkata");
+  //   const elevenPM = moment.tz("Asia/Kolkata").hour(17).minute(27).second(0); // Set the time to 11 PM
+  //   console.log("TIME_TO_UPDATE_CAROUSEL: ", elevenPM.format());
+  //   if (now.isAfter(elevenPM)) {
+  //     // return 0;
+  //     elevenPM.add(1, "day"); // If it's past 11 PM, set it to 11 PM of the next day
+  //   }
+  //   const diffInMilliseconds = elevenPM.diff(now);
+  //   return diffInMilliseconds;
+  // };
 
   // To DELETE THE RECOMMENDATION
   const handleSelectFood = (id, index) => {
     const date = getTodayDate();
-    const timestamp = new Date().getTime();
 
     const foodId = id;
     console.log("INDEX:", index);
@@ -270,10 +275,18 @@ const HomeScreen = () => {
 
   const handleDeleteFood = () => {
     const date = getTodayDate();
-    const timestamp = new Date().getTime();
     if (foods.length > 1) {
       const foodId = foods[0].food_id;
-      setCarouselItems([{ ...foods[1], date, timestamp }, ...carouselItems]);
+      setCarouselItems([
+        {
+          ...foods[1],
+          date,
+          timestamp,
+          date: getTodayDate(),
+          deadline: getElevenPM(),
+        },
+        ...carouselItems,
+      ]);
       const remainingFoods = foods.filter((item) => foodId !== item.food_id);
       setFoods(remainingFoods);
     } else
@@ -284,7 +297,7 @@ const HomeScreen = () => {
   };
 
   const _renderItem = ({ item, index }) => {
-    console.log("ITEM: ", item);
+    console.log("ITEM_IMAGE: ", item.image);
     return (
       <View style={styles.carouselFood}>
         <View style={styles.imageContainer}>
@@ -611,7 +624,7 @@ const HomeScreen = () => {
       </View>
 
       {/* To LIST DOWN CHOSEN ITEMS OR DISCARDED ITEMS */}
-      <View style={{ flex: 1 }}>
+      <View style={{ flex: 1, marginTop: 50 }}>
         {/* To DISPLAY PAST RECOMMENDED ITEMS */}
         <View style={{}}>
           <Pressable

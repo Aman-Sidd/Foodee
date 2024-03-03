@@ -39,9 +39,9 @@ const WelcomeScreen = ({ navigation }) => {
       <SafeAreaView style={styles.mainContainer}>
         <View style={styles.imageContainer}>
           <Image
-            style={{ height: 300, width: 300, resizeMode: "contain" }}
+            style={{ height: 900, width: 800, resizeMode: "contain" }}
             source={{
-              uri: "https://img.freepik.com/premium-vector/traditional-cuisine-map-realistic-composition-with-view-india-country-border-with-dish-icons-text-vector-illustration_1284-75907.jpg?w=740",
+              uri: "https://scontent.fixc4-1.fna.fbcdn.net/v/t39.30808-6/431018799_1540621363453706_7222498144680716548_n.jpg?_nc_cat=108&ccb=1-7&_nc_sid=3635dc&_nc_ohc=WCfiF9r5_UcAX-otU6q&_nc_ht=scontent.fixc4-1.fna&oh=00_AfA0bza6RYCf6DEfHPz0kaV1-wOKSibVBOBC7ZssIzos-w&oe=65E75721",
             }}
           />
         </View>
