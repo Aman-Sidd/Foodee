@@ -83,13 +83,14 @@ const HomeScreen = () => {
   // To RETRIEVE FOOD DETAILS
   const fetchFood = async (filteredPastRecommendations = []) => {
     const isConnected = await checkNetworkConnectivity();
-    console.log("isConnected: ", isConnected);
+    console.log("fetchFood isConnected: ", isConnected);
     if (!isConnected) {
-      console.log("Replacing Screen");
+      const keys = await AsyncStorage.getAllKeys();
+      await AsyncStorage.removeItem(`${foodType}${selectedMeal}`);
+      console.log("Async Storage Keys when no network: ", keys);
       navigation.replace("NetworkError");
       return;
     }
-
     setLoadingRecommendations(true);
     console.log("API is called");
     console.log("PastRecomWhileFetching: ", pastRecommendations);
@@ -376,6 +377,12 @@ const HomeScreen = () => {
     );
   };
 
+  const selectMeal = (mealType) => {
+    setPastRecommendations([]);
+    setActiveSlide(0);
+    setSelectedMeal(mealType);
+  };
+
   return connected ? (
     <SafeAreaView style={styles.mainContainer}>
       <View>
@@ -449,11 +456,7 @@ const HomeScreen = () => {
       <View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false}>
           <Pressable
-            onPress={() => {
-              setPastRecommendations([]);
-              setActiveSlide(0);
-              setSelectedMeal("Breakfast");
-            }}
+            onPress={() => selectMeal("Breakfast")}
             style={[
               styles.buttonStyle,
               selectedMeal === "Breakfast"
@@ -479,12 +482,7 @@ const HomeScreen = () => {
             </Text>
           </Pressable>
           <Pressable
-            onPress={() => {
-              setPastRecommendations([]);
-              setActiveSlide(0);
-
-              setSelectedMeal("Lunch");
-            }}
+            onPress={() => selectMeal("Lunch")}
             style={[
               styles.buttonStyle,
               selectedMeal === "Lunch"
@@ -508,11 +506,7 @@ const HomeScreen = () => {
             </Text>
           </Pressable>
           <Pressable
-            onPress={() => {
-              setPastRecommendations([]);
-              setActiveSlide(0);
-              setSelectedMeal("Dinner");
-            }}
+            onPress={() => selectMeal("Dinner")}
             style={[
               styles.buttonStyle,
               selectedMeal === "Dinner"

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from "react-native";
 import NetInfo from "@react-native-community/netinfo";
 import { reloadAsync } from "expo-updates";
