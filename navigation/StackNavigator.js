@@ -4,6 +4,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { NavigationContainer } from "@react-navigation/native";
 import WelcomeScreen from "../screens/WelcomeScreen";
 import HomeScreen from "../screens/HomeScreen";
+import NetworkErrorScreen from "../screens/NetworkErrorScreen";
 
 const StackNavigator = () => {
   const Stack = createNativeStackNavigator();
@@ -19,6 +20,11 @@ const StackNavigator = () => {
         <Stack.Screen
           name="Home"
           component={HomeScreen}
+          options={{ headerShown: false }}
+        />
+        <Stack.Screen
+          name="NetworkError"
+          component={NetworkErrorScreen}
           options={{ headerShown: false }}
         />
       </Stack.Navigator>

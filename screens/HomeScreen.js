@@ -21,12 +21,15 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useSelector } from "react-redux";
 import AsyncStorage from "@react-native-community/async-storage";
 import moment from "moment-timezone";
+import NetInfo from "@react-native-community/netinfo";
+import NetworkErrorScreen from "./NetworkErrorScreen";
+import { useNavigation } from "@react-navigation/native";
 
 const HomeScreen = () => {
   const user = useSelector((state) => state.user);
   const userName = user.user_name;
   const userFoodType = user.food_type;
-
+  console.log("userFoodType: ", userFoodType);
   const [selectedMeal, setSelectedMeal] = useState("Breakfast");
   const [foods, setFoods] = useState([]);
   const [loadingRecommendations, setLoadingRecommendations] = useState(true);
@@ -35,8 +38,10 @@ const HomeScreen = () => {
   const [previousData, setPreviousData] = useState("Chosen");
   const [activeSlide, setActiveSlide] = useState(0);
   const [carouselItems, setCarouselItems] = useState([]);
+  const [connected, setConnected] = useState(true);
   const carouselRef = useRef(null);
   const paginationRef = useRef(null);
+  const navigation = useNavigation();
   moment.tz.setDefault("Asia/Kolkata");
 
   const getTodayDate = () => {
@@ -45,14 +50,31 @@ const HomeScreen = () => {
   const timestamp = moment().valueOf();
 
   const getElevenPM = () => {
-    return moment.tz("Asia/Kolkata").hour(23).minute(0).second(0).valueOf();
+    const now = moment.tz("Asia/Kolkata");
+    const elevenPM = moment.tz("Asia/Kolkata").hour(23).minute(0).second(0);
+
+    // Check if the current time has passed 11 PM
+    if (now.isAfter(elevenPM)) {
+      // Return 11 PM of the next day
+      return moment
+        .tz("Asia/Kolkata")
+        .add(1, "day")
+        .hour(23)
+        .minute(0)
+        .second(0)
+        .valueOf();
+    } else {
+      // Return today's 11 PM
+      return elevenPM.valueOf();
+    }
   };
 
   const deleteAsyncData = async () => {
     try {
+      await AsyncStorage.removeItem(`${foodType}${selectedMeal}`);
       const keys = await AsyncStorage.getAllKeys();
+      // await AsyncStorage.multiRemove(keys);
       console.log(keys);
-      await AsyncStorage.multiRemove(keys);
     } catch (err) {
       console.log(err);
     }
@@ -60,6 +82,14 @@ const HomeScreen = () => {
 
   // To RETRIEVE FOOD DETAILS
   const fetchFood = async (filteredPastRecommendations = []) => {
+    const isConnected = await checkNetworkConnectivity();
+    console.log("isConnected: ", isConnected);
+    if (!isConnected) {
+      console.log("Replacing Screen");
+      navigation.replace("NetworkError");
+      return;
+    }
+
     setLoadingRecommendations(true);
     console.log("API is called");
     console.log("PastRecomWhileFetching: ", pastRecommendations);
@@ -67,12 +97,37 @@ const HomeScreen = () => {
       filteredPastRecommendations.map((item) => item.food_id)
     );
     console.log("DeclinedArr: ", declined_array);
+    console.log("foodType while fetching: ", foodType);
+
+    // Get current time in milliseconds
+    const now = moment.tz("Asia/Kolkata");
+
+    // Check if the current time has passed 11 PM
+    const elevenPM = getElevenPM();
+    const tomorrow = moment.tz("Asia/Kolkata").add(1, "day");
+    const tomorrowDay = tomorrow.day(); // Day of the week for tomorrow
+
+    let special_day = "n"; // Default to "n"
+    if (now.isAfter(elevenPM) || now.hours() >= 23) {
+      // If it's past 11 PM, or it's 11 PM, set to tomorrow's special day
+      if (tomorrowDay === 6 || tomorrowDay === 0) {
+        // If tomorrow is Saturday or Sunday
+        special_day = "y";
+      }
+    } else if (now.day() === 6 || now.day() === 0) {
+      // If today is Saturday or Sunday
+      special_day = "y";
+    }
+    console.log("now.day(): ", now.day());
+    console.log("special_day: ", special_day);
+
     const payload = {
       user_food_preference: foodType,
       food_time_type: selectedMeal,
       declined_food_array: declined_array,
-      special_day: "y",
+      special_day: special_day,
     };
+
     try {
       const formData = new FormData();
 
@@ -95,11 +150,7 @@ const HomeScreen = () => {
           timestamp,
           date: getTodayDate(),
           isSelected: null,
-          deadline: () => {
-            const val = getElevenPM();
-            console.log("HEY I am deadline value: ", val);
-            return val;
-          },
+          deadline: getElevenPM(),
         },
       ]);
     } catch (err) {
@@ -109,20 +160,25 @@ const HomeScreen = () => {
     }
   };
 
+  const checkNetworkConnectivity = async () => {
+    const state = await NetInfo.fetch();
+    return state.isConnected;
+  };
+
   useEffect(() => {
-    // Load data from AsyncStorage when the component mount
     loadData();
     // deleteAsyncData();
   }, [foodType, selectedMeal]);
 
   useEffect(() => {
-    // Save data to AsyncStorag e whenever relevant state changes
+    // Save data to AsyncStorage whenever relevant state changes
     saveData();
   }, [foods, pastRecommendations, carouselItems]);
 
   const saveData = async () => {
+    console.log("Saving Data..");
+
     try {
-      console.log("carouselItem[0]: ", carouselItems[0]);
       const data = {
         foods,
         pastRecommendations,
@@ -133,14 +189,10 @@ const HomeScreen = () => {
         JSON.stringify(data)
       );
     } catch (error) {
-      console.error("Error saving data to AsyncStorage :", error);
+      console.error("Error saving data to AsyncStorage:", error);
+    } finally {
+      console.log("Data Saved...");
     }
-  };
-
-  const fetchCarouselItems = (time) => {
-    setTimeout(async () => {
-      await fetchFood();
-    }, time);
   };
 
   const loadData = async () => {
@@ -171,6 +223,12 @@ const HomeScreen = () => {
             }
           });
 
+        // Updates Carousel Food list at 11 PM everyday
+        // const carouselUpdate =
+        //   (currentTime - parsedData.carouselItems[0].timestamp) / 1000 >= 1000
+        //     ? true
+        //     : false;
+
         setFoods(parsedData.foods || []);
         setPastRecommendations(filteredPastRecommendations || []);
         parsedData.carouselItems.sort((a, b) => {
@@ -185,19 +243,12 @@ const HomeScreen = () => {
         });
 
         setCarouselItems(parsedData.carouselItems || []);
-
-        // const carouselTimestamp = parsedData.carouselItems[0].timestamp;
-        // console.log("CAROUSEL TIMESTAMP: ", carouselTimestamp / 1000);
-        // // sddsa
-
-        // console.log("ELEVEN PM: ", elevenPM / 1000);
-        // const diffInMilliseconds = elevenPM - carouselTimestamp;
-        // console.log("DIFF TIMESTMAP : ", diffInMilliseconds / 1000);
+        console.log("carouselItem[0]: ", carouselItems[0]);
 
         // Check if any past recommendations were deleted
         console.log("DEADLINE : ", parsedData.carouselItems[0].deadline);
         console.log("FUnction", getElevenPM());
-        console.log("ELEVEN PM : ", timestamp);
+        console.log("CURR TIME : ", timestamp);
         console.log("DIFF: ", timestamp - parsedData.carouselItems[0].deadline);
         if (
           isPastRecommendationDlt ||
@@ -212,34 +263,10 @@ const HomeScreen = () => {
     } catch (error) {
       console.error("Error loading data from AsyncStorage:", error);
     } finally {
+      console.log("Data Loaded...");
       setLoadingRecommendations(false);
     }
   };
-
-  // useEffect(() => {
-  //   // Set up the timer to trigge r the update at 11 PM
-  //   const timer = setTimeout(updateCarousel, calculateTimeToNextUpdate());
-
-  //   // Clear the timeout when the component unmounts
-  //   return () => clearTimeout(timer);
-  // }, [carouselItems]);
-
-  // const updateCarousel = async () => {
-  //   // Fetch new data and update the carousel
-  //   await fetchFood();
-  // };
-
-  // const calculateTimeToNextUpdate = () => {
-  //   const now = moment.tz("Asia/Kolkata");
-  //   const elevenPM = moment.tz("Asia/Kolkata").hour(17).minute(27).second(0); // Set the time to 11 PM
-  //   console.log("TIME_TO_UPDATE_CAROUSEL: ", elevenPM.format());
-  //   if (now.isAfter(elevenPM)) {
-  //     // return 0;
-  //     elevenPM.add(1, "day"); // If it's past 11 PM, set it to 11 PM of the next day
-  //   }
-  //   const diffInMilliseconds = elevenPM.diff(now);
-  //   return diffInMilliseconds;
-  // };
 
   // To DELETE THE RECOMMENDATION
   const handleSelectFood = (id, index) => {
@@ -278,13 +305,7 @@ const HomeScreen = () => {
     if (foods.length > 1) {
       const foodId = foods[0].food_id;
       setCarouselItems([
-        {
-          ...foods[1],
-          date,
-          timestamp,
-          date: getTodayDate(),
-          deadline: getElevenPM(),
-        },
+        { ...foods[1], date, timestamp, deadline: getElevenPM() },
         ...carouselItems,
       ]);
       const remainingFoods = foods.filter((item) => foodId !== item.food_id);
@@ -297,7 +318,6 @@ const HomeScreen = () => {
   };
 
   const _renderItem = ({ item, index }) => {
-    console.log("ITEM_IMAGE: ", item.image);
     return (
       <View style={styles.carouselFood}>
         <View style={styles.imageContainer}>
@@ -356,7 +376,7 @@ const HomeScreen = () => {
     );
   };
 
-  return (
+  return connected ? (
     <SafeAreaView style={styles.mainContainer}>
       <View>
         <Text style={{ fontSize: 20, fontWeight: "500" }}>
@@ -523,11 +543,11 @@ const HomeScreen = () => {
           </Pressable>
         </ScrollView>
       </View>
-      <View>
+      <View style={{ marginVertical: 10 }}>
         <Text
           style={{
-            marginVertical: 10,
-            fontSize: 18,
+            marginVertical: 5,
+            fontSize: 22,
             fontWeight: "500",
             color: "#4f4f4f",
           }}
@@ -674,6 +694,8 @@ const HomeScreen = () => {
         </View>
       </View>
     </SafeAreaView>
+  ) : (
+    <NetworkErrorScreen setConnected={setConnected} />
   );
 };
 

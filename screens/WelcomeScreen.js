@@ -9,7 +9,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { SafeAreaView } from "react-native-safe-area-context";
 import KeyboardDismissWrapper from "../components/KeyboardDismissWrapper";
 import { useDispatch } from "react-redux";
@@ -17,31 +17,71 @@ import { set_food_type, set_name, set_user_info } from "../redux/UserSlice";
 import { MaterialIcons } from "@expo/vector-icons";
 import { Feather } from "@expo/vector-icons";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-community/async-storage";
+import LoadingScreen from "../components/LoadingScreen";
 
 const WelcomeScreen = ({ navigation }) => {
   const [name, setName] = useState("");
   const [foodType, setFoodType] = useState("veg");
   const dispatch = useDispatch();
+  const [loading, setLoading] = useState(false);
 
   console.log(name);
 
-  const handleGetStarted = () => {
+  const handleGetStarted = async () => {
     if (name === "") {
       Alert.alert("Oops!", "Name cannot be empty.");
     } else {
       dispatch(set_user_info({ name, foodType }));
+      await AsyncStorage.setItem(
+        "userInfo",
+        JSON.stringify({ username: name, food_pref: foodType })
+      );
       navigation.replace("Home");
     }
   };
 
-  return (
+  useEffect(() => {
+    const checkForData = async () => {
+      try {
+        setLoading(true);
+        const userInfo = await AsyncStorage.getItem("userInfo");
+        if (userInfo) {
+          const parsedData = JSON.parse(userInfo);
+          console.log(parsedData);
+          console.log(
+            "name: ",
+            parsedData.username,
+            "foodType: ",
+            parsedData.food_pref
+          );
+          dispatch(
+            set_user_info({
+              name: parsedData.username,
+              foodType: parsedData.food_pref,
+            })
+          );
+          navigation.replace("Home");
+        }
+      } catch (err) {
+        console.log(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    checkForData();
+  }, []);
+
+  return loading ? (
+    <LoadingScreen />
+  ) : (
     <KeyboardDismissWrapper>
       <SafeAreaView style={styles.mainContainer}>
         <View style={styles.imageContainer}>
           <Image
-            style={{ height: 900, width: 800, resizeMode: "contain" }}
+            style={{ height: 1000, width: 900, resizeMode: "cover" }}
             source={{
-              uri: "https://scontent.fixc4-1.fna.fbcdn.net/v/t39.30808-6/431018799_1540621363453706_7222498144680716548_n.jpg?_nc_cat=108&ccb=1-7&_nc_sid=3635dc&_nc_ohc=WCfiF9r5_UcAX-otU6q&_nc_ht=scontent.fixc4-1.fna&oh=00_AfA0bza6RYCf6DEfHPz0kaV1-wOKSibVBOBC7ZssIzos-w&oe=65E75721",
+              uri: "https://raw.githubusercontent.com/metaladmiral/Foodee/master/foodee-images/foodee.png",
             }}
           />
         </View>
@@ -64,53 +104,6 @@ const WelcomeScreen = ({ navigation }) => {
               placeholder="Your Good Name, Please!"
             />
           </KeyboardAvoidingView>
-
-          {/* <View
-            style={{
-              display: "flex",
-              flexDirection: "row",
-              justifyContent: "center",
-            }}
-          >
-            <Pressable
-              style={{
-                width: 80,
-                backgroundColor: "gray",
-                height: 40,
-                marginHorizontal: 20,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                borderRadius: 8,
-              }}
-              onPress={() => setFoodType("veg")}
-            >
-              <Text
-                style={{ fontSize: 15, color: "white", fontWeight: "bold" }}
-              >
-                Veg
-              </Text>
-            </Pressable>
-            <Pressable
-              style={{
-                width: 80,
-                backgroundColor: "gray",
-                height: 40,
-                marginHorizontal: 20,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                borderRadius: 8,
-              }}
-              onPress={() => setFoodType("nonveg")}
-            >
-              <Text
-                style={{ color: "white", fontSize: 15, fontWeight: "bold" }}
-              >
-                Non-Veg
-              </Text>
-            </Pressable>
-          </View> */}
 
           <View
             style={{
@@ -212,7 +205,7 @@ const styles = StyleSheet.create({
     gap: 5,
     flexDirection: "row",
     borderRadius: 10,
-    marginTop: 13,
+    marginTop: 5,
     marginHorizontal: 7,
     justifyContent: "center",
     alignItems: "center",
@@ -220,7 +213,7 @@ const styles = StyleSheet.create({
   footerContainer: {
     // backgroundColor: "gray",
     flex: 1,
-    height: 240,
+    // height: 240,
     gap: 30,
     marginHorizontal: 10,
   },
