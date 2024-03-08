@@ -351,9 +351,17 @@ const HomeScreen = () => {
             }}
           >
             <Text
-              style={{ color: "black", fontWeight: "bold", color: "#008000" }}
+              style={{
+                color: "black",
+                textAlign: "center",
+                fontWeight: "bold",
+                color: "#008000",
+              }}
             >
               SELECTED
+            </Text>
+            <Text style={{ color: "black", fontWeight: "500", fontSize: 13 }}>
+              Visit again after 11 PM for new recommendations
             </Text>
           </View>
         ) : item.isSelected === "discarded" ? (
@@ -540,8 +548,8 @@ const HomeScreen = () => {
       <View style={{ marginVertical: 10 }}>
         <Text
           style={{
-            marginVertical: 5,
-            fontSize: 22,
+            marginTop: 5,
+            fontSize: 21,
             fontWeight: "500",
             color: "#4f4f4f",
           }}
